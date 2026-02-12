@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>DICEY 🎲🎲</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0b0f;overflow-x:hidden;font-family:'SF Mono','Fira Code','Consolas',monospace;color:#e0e0e0}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:#0a0b0f}
+::-webkit-scrollbar-thumb{background:#1a1b2e;border-radius:4px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const{useState,useEffect,useRef,useCallback}=React;
+
+const NAMES=["Username2","BlackKings","Anon","edibo","sigurdblackbold","Tosti","jayskii","bgsfl","popovshuni","Nonoss","0xDegen","CryptoApe","MoonBoi","DiamondHands","PaperTrader","YOLOKing","RugSurvivor","TokenFlip","WhaleAlert","BagHolder","PumpChaser","LiqPool","StakeNBake","MemeLord","LamboSoon","AlphaLeaker","BullRunner","FOMObot","HODLer99","JeetKing","SolSurfer","FlashLoan","RektAgain","MarginCall","LongSqueeze","dumpoor","ser_clicks","pogchamp","wenlambo","apetogether","ngmi_andy","gm_ser","cope_dealer","based_chad"];
+const AVATARS=["🐻","🐸","🦊","🐵","🐷","🐱","🐶","🐰","🦁","🐼","🐨","🐙","👽","🤖","💀","🎃","👾","🦄","🐲","🐺"];
+const RUG_MSGS=["ngmi","should've sold 💀","gg no re","rekt lmaooo","down bad fr","paper hands win again","imagine holding 💀","certified rug moment","cope harder","devs rugged lol","thanks for the liquidity","ur ngmi ser"];
+const HYPE_MSGS=["LFG 🚀","TO THE MOON","SEND IT","DIAMOND HANDS","WGMI","HOLD THE LINE","APE IN NOW","PUMP IT","LETS GOOO","MASSIVE GREEN DILDO","PARABOLIC","NUMBER GO UP"];
+const EMOJIS_PUMP=["🚀","💎","🐸","📈","🔥","💰","🌙","⬆️","🎯","💸","🤑","👑"];
+const EMOJIS_DUMP=["🤡","💀","📉","😈","🫠","☠️","🪦","⬇️","😭","🔻","💩","👎"];
+
+const fmt=n=>n.toFixed(2);
+const fmtM=n=>n<0.01?"0.00x":n.toFixed(2)+"x";
+const rng=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+
+const genBots=count=>Array.from({length:count},()=>{
+  const r=Math.random();
+  let target=r<0.3?rng(1.05,1.5):r<0.6?rng(1.5,3):r<0.85?rng(3,8):rng(8,50);
+  return{name:pick(NAMES),avatar:pick(AVATARS),betAmt:Math.floor(rng(0.001,0.5)*1000)/1000,target,cashedOut:false,cashMult:0,active:true};
+});
+
+const Particle=({emoji,x,y,size,dur,delay})=>(
+  React.createElement('div',{style:{position:"fixed",left:`${x}%`,top:`${y}%`,fontSize:size,pointerEvents:"none",zIndex:200,animation:`floatUp ${dur}s ease-out ${delay}s forwards`,opacity:0}},emoji)
+);
+
+const HypeMsg=({msg,x,y,color})=>(
+  React.createElement('div',{style:{position:"fixed",left:`${x}%`,top:`${y}%`,transform:"translate(-50%,-50%)",fontSize:rng(16,28),fontWeight:900,color,pointerEvents:"none",zIndex:200,animation:"hypeText 1.5s ease-out forwards",opacity:0,fontFamily:"inherit",textShadow:`0 0 20px ${color}88`,whiteSpace:"nowrap"}},msg)
+);
+
+function App(){
+  const[phase,setPhase]=useState("betting");
+  const[mult,setMult]=useState(1);
+  const[candles,setCandles]=useState([]);
+  const[currentCandle,setCurrentCandle]=useState(null);
+  const[crashPoint,setCrashPoint]=useState(0);
+  const[roundNum,setRoundNum]=useState(0);
+  const[countdown,setCountdown]=useState(3);
+  const[balance,setBalance]=useState(1.000);
+  const[betAmt,setBetAmt]=useState(0.01);
+  const[betPct,setBetPct]=useState(50);
+  const[sellPct,setSellPct]=useState(100);
+  const[positions,setPositions]=useState([]);
+  const[totalPnl,setTotalPnl]=useState(0);
+  const[stats,setStats]=useState({totalPL:0,wins:0,rounds:0,best:0});
+  const[bots,setBots]=useState([]);
+  const[feedItems,setFeedItems]=useState([]);
+  const[roundHistory,setRoundHistory]=useState([]);
+  const[particles,setParticles]=useState([]);
+  const[hypeTexts,setHypeTexts]=useState([]);
+  const[screenFlash,setScreenFlash]=useState(null);
+  const[borderGlow,setBorderGlow]=useState(null);
+  const[screenShake,setScreenShake]=useState(0);
+  const[bgPulse,setBgPulse]=useState(false);
+  const[comboStreak,setComboStreak]=useState(0);
+  const[preCountdown,setPreCountdown]=useState(0);
+  const[roundStartFlash,setRoundStartFlash]=useState(false);
+
+  const[leaderboard]=useState(()=>
+    Array.from({length:15},()=>({name:pick(NAMES),avatar:pick(AVATARS),profit:rng(-0.5,2),winRate:Math.floor(rng(20,80)),trades:Math.floor(rng(10,500))})).sort((a,b)=>b.profit-a.profit)
+  );
+
+  const multRef=useRef(1);
+  const positionsRef=useRef([]);
+  const betAmtRef=useRef(0.01);
+  const botsRef=useRef([]);
+  const crashRef=useRef(0);
+  const tickRef=useRef(0);
+  const candleRef=useRef({o:1,h:1,l:1,c:1});
+  const intervalRef=useRef(null);
+  const lastMult=useRef(1);
+  const particleId=useRef(0);
+  const hypeId=useRef(0);
+  const feedsRef=useRef([]);
+
+  useEffect(()=>{positionsRef.current=positions},[positions]);
+  useEffect(()=>{betAmtRef.current=betAmt},[betAmt]);
+  useEffect(()=>{botsRef.current=bots},[bots]);
+
+  const spawnParticles=(count,emojis,yRange=[20,80])=>{
+    const ps=Array.from({length:count},()=>({id:particleId.current++,emoji:pick(emojis),x:rng(5,95),y:rng(yRange[0],yRange[1]),size:rng(18,40),dur:rng(1,2.5),delay:rng(0,0.5)}));
+    setParticles(p=>[...p.slice(-20),...ps]);
+    setTimeout(()=>setParticles(p=>p.filter(pp=>!ps.find(q=>q.id===pp.id))),3000);
+  };
+  const spawnHype=(msg,color)=>{
+    const h={id:hypeId.current++,msg,x:rng(15,85),y:rng(15,70),color};
+    setHypeTexts(t=>[...t.slice(-8),h]);
+    setTimeout(()=>setHypeTexts(t=>t.filter(tt=>tt.id!==h.id)),2000);
+  };
+  const flashScreen=(color,dur=300)=>{setScreenFlash(color);setTimeout(()=>setScreenFlash(null),dur);};
+
+  const genCrash=()=>{const r=Math.random();if(r<0.04)return rng(1.0,1.05);if(r<0.25)return rng(1.05,1.5);if(r<0.50)return rng(1.5,2.5);if(r<0.70)return rng(2.5,5);if(r<0.85)return rng(5,15);if(r<0.95)return rng(15,50);return rng(50,200);};
+
+  const simPrice=useCallback((elapsed)=>{
+    const base=Math.pow(Math.E,0.06*elapsed);
+    const noise=Math.sin(elapsed*2.5)*0.08+Math.sin(elapsed*7)*0.04+Math.sin(elapsed*0.8)*0.12;
+    const walk=(Math.random()-0.48)*0.06;
+    let val=base*(1+noise+walk);
+    if(Math.random()<0.008)val*=rng(0.85,0.95);
+    if(Math.random()<0.005)val*=rng(1.05,1.15);
+    return Math.max(0.5,val);
+  },[]);
+
+  const startRound=useCallback(()=>{
+    setPreCountdown(2);
+    let pc=2;
+    const pci=setInterval(()=>{
+      pc--;setPreCountdown(pc);
+      if(pc<=0){clearInterval(pci);setPreCountdown(0);actuallyStartRound();}
+    },1000);
+  },[]);
+
+  const actuallyStartRound=useCallback(()=>{
+    if(intervalRef.current){clearInterval(intervalRef.current);intervalRef.current=null;}
+    setRoundStartFlash(true);
+    setTimeout(()=>setRoundStartFlash(false),1500);
+    const cp=genCrash();
+    crashRef.current=cp;setCrashPoint(cp);
+    const prePositions=positionsRef.current.map(p=>({...p,entry:1}));
+    setPositions(prePositions);positionsRef.current=prePositions;
+    setTotalPnl(0);
+    setMult(1);multRef.current=1;lastMult.current=1;
+    tickRef.current=0;
+    setPhase("live");setRoundNum(r=>r+1);
+    setBorderGlow(null);setScreenShake(0);setBgPulse(false);
+    const newBots=genBots(8+Math.floor(Math.random()*8));
+    setBots(newBots);botsRef.current=newBots;
+    feedsRef.current=[];setFeedItems([]);
+    candleRef.current={o:1,h:1,l:1,c:1};setCurrentCandle({o:1,h:1,l:1,c:1});
+    flashScreen("#00ff8833",200);
+
+    const startT=Date.now();
+    let milestoneHit={2:false,3:false,5:false,10:false,15:false,25:false,50:false,100:false};
+
+    intervalRef.current=setInterval(()=>{
+      const elapsed=(Date.now()-startT)/1000;
+      const val=simPrice(elapsed);
+
+      if(val>=crashRef.current||elapsed>crashRef.current*3){
+        clearInterval(intervalRef.current);intervalRef.current=null;
+        multRef.current=0;setMult(0);setPhase("crashed");
+        const cc={...candleRef.current,c:0,l:0};
+        setCurrentCandle(null);setCandles(prev=>[...prev.slice(-78),cc]);
+
+        flashScreen("#ff336666",400);setScreenShake(2);
+        setTimeout(()=>{setScreenShake(0);setBorderGlow(null);},600);
+        spawnParticles(12,EMOJIS_DUMP,[10,90]);
+        spawnHype(pick(RUG_MSGS),"#ff3366");
+
+        const updBots=botsRef.current.map(b=>b.cashedOut?b:{...b,active:false});
+        setBots(updBots);
+        updBots.filter(b=>!b.cashedOut).forEach(b=>{
+          feedsRef.current.push({name:b.name,avatar:b.avatar,type:"rug",amt:b.betAmt,mult:0,time:Date.now()});
+        });
+        setFeedItems([...feedsRef.current]);
+
+        if(positionsRef.current.length>0){
+          const totalLoss=positionsRef.current.reduce((s,p)=>s+p.amt,0);
+          setStats(s=>({...s,totalPL:s.totalPL-totalLoss,rounds:s.rounds+1}));
+          setPositions([]);positionsRef.current=[];setComboStreak(0);
+        }
+        setTotalPnl(0);
+        setRoundHistory(h=>[...h.slice(-9),{crash:crashRef.current,high:Math.max(cc.h||1,crashRef.current),round:h.length+1}]);
+
+        let c=3;setCountdown(c);
+        const ci=setInterval(()=>{c--;setCountdown(c);if(c<=0){clearInterval(ci);setPhase("betting");setCountdown(3);setBorderGlow(null);}},1000);
+        return;
+      }
+
+      multRef.current=val;tickRef.current++;setMult(val);
+
+      [2,3,5,10,15,25,50,100].forEach(m=>{
+        if(val>=m&&!milestoneHit[m]){
+          milestoneHit[m]=true;
+          if(m>=10)flashScreen("#ffaa0033",200);else if(m>=5)flashScreen("#00ff8822",150);
+          if(m>=5)spawnParticles(m>=25?15:m>=10?10:5,EMOJIS_PUMP);
+          if(m>=5)spawnHype(`${m}x ${pick(HYPE_MSGS)}`,m>=25?"#ffaa00":m>=10?"#00ff88":"#22dd77");
+          if(m>=10){setScreenShake(m>=25?2:1);setTimeout(()=>setScreenShake(0),400);}
+        }
+      });
+
+      if(val>=15)setBorderGlow("#ffaa00");else if(val>=5)setBorderGlow("#00ff8866");else setBorderGlow(null);
+      if(val>=10)setBgPulse(true);else setBgPulse(false);
+
+      if(val>=3&&Math.random()<0.02)spawnParticles(1,EMOJIS_PUMP);
+      if(val>=8&&Math.random()<0.03)spawnHype(pick(HYPE_MSGS),"#00ff88");
+      if(val>=20&&Math.random()<0.04){spawnParticles(3,["🚀","💎","🌙","🤑"]);spawnHype(pick(["INSANE","PARABOLIC","MASSIVE","LEGENDARY"]),"#ffaa00");}
+      if(val<lastMult.current*0.94&&val>1.5)flashScreen("#ff336611",80);
+      lastMult.current=val;
+
+      const cc=candleRef.current;cc.c=val;if(val>cc.h)cc.h=val;if(val<cc.l)cc.l=val;
+      setCurrentCandle({...cc});
+      if(tickRef.current%20===0){setCandles(prev=>[...prev.slice(-78),{...cc}]);candleRef.current={o:val,h:val,l:val,c:val};}
+
+      const ub=[...botsRef.current];let ch=false;
+      ub.forEach((b,i)=>{if(!b.cashedOut&&b.active&&val>=b.target){ub[i]={...b,cashedOut:true,cashMult:val};feedsRef.current.push({name:b.name,avatar:b.avatar,type:"cashout",amt:b.betAmt,mult:val,time:Date.now()});ch=true;}});
+      if(Math.random()<0.03){const nb={name:pick(NAMES),avatar:pick(AVATARS),betAmt:Math.floor(rng(0.001,0.3)*1000)/1000,target:rng(val*1.1,val*3),cashedOut:false,cashMult:0,active:true};ub.push(nb);feedsRef.current.push({name:nb.name,avatar:nb.avatar,type:"buy",amt:nb.betAmt,mult:val,time:Date.now()});ch=true;}
+      if(ch){botsRef.current=ub;setBots([...ub]);setFeedItems([...feedsRef.current].slice(-30));}
+
+      if(positionsRef.current.length>0&&val>0){
+        const tp=positionsRef.current.reduce((s,p)=>s+(p.amt*(val/p.entry)-p.amt),0);
+        setTotalPnl(tp);
+      }
+    },50);
+  },[simPrice]);
+
+  useEffect(()=>{
+    let p=1;const hist=[];
+    for(let i=0;i<40;i++){const dir=(Math.random()-0.48)*0.08;const c=p*(1+dir);const h=Math.max(p,c)*(1+Math.random()*0.03);const l=Math.min(p,c)*(1-Math.random()*0.03);hist.push({o:p,h,l,c});p=c;}
+    setCandles(hist);
+  },[]);
+
+  useEffect(()=>{if(phase==="betting"){const t=setTimeout(()=>startRound(),2000);return()=>clearTimeout(t);}},[phase,startRound]);
+  useEffect(()=>{const t=setTimeout(()=>startRound(),3000);return()=>{clearTimeout(t);if(intervalRef.current)clearInterval(intervalRef.current);};},[]);
+
+  const handleBuy=()=>{
+    if(betAmt>balance||betAmt<=0)return;
+    const entry=phase==="live"&&multRef.current>0?multRef.current:1;
+    setBalance(b=>b-betAmt);
+    setPositions(p=>[...p,{id:Date.now()+Math.random(),entry,amt:betAmt}]);
+    flashScreen("#00ccff33",150);
+  };
+
+  const handleSellAll=(fraction=1)=>{
+    if(positions.length===0||phase!=="live")return;
+    const m=multRef.current;if(m<=0)return;
+    let totalProfit=0;const remaining=[];
+    positions.forEach(pos=>{
+      const sellAmt=pos.amt*fraction;const remainAmt=pos.amt-sellAmt;
+      const w=sellAmt*(m/pos.entry);totalProfit+=w-sellAmt;
+      setBalance(b=>b+w);
+      if(remainAmt>=0.0005)remaining.push({...pos,amt:remainAmt});
+    });
+    const bestR=m/Math.min(...positions.map(p=>p.entry));
+    setStats(s=>({...s,totalPL:s.totalPL+totalProfit,wins:s.wins+(totalProfit>0?1:0),rounds:s.rounds+1,best:Math.max(s.best,bestR)}));
+    setPositions(remaining);positionsRef.current=remaining;
+    if(remaining.length===0)setTotalPnl(0);
+    if(totalProfit>0)setComboStreak(c=>c+1);else if(fraction===1)setComboStreak(0);
+    flashScreen(totalProfit>=0?"#00ff8833":"#ff336633",200);
+    if(bestR>=3)spawnParticles(8,["💰","💸","🤑","💎"]);
+    if(totalProfit>0.05)spawnHype(`+${totalProfit.toFixed(3)} 🤑`,"#00ff88");
+  };
+
+  const handleSellOne=(id,fraction=1)=>{
+    if(phase!=="live")return;
+    const pos=positions.find(p=>p.id===id);if(!pos)return;
+    const m=multRef.current;if(m<=0)return;
+    const sellAmt=pos.amt*fraction;const remainAmt=pos.amt-sellAmt;
+    const w=sellAmt*(m/pos.entry);const profit=w-sellAmt;
+    setBalance(b=>b+w);
+    setStats(s=>({...s,totalPL:s.totalPL+profit,wins:profit>0?s.wins+1:s.wins,rounds:s.rounds+1,best:Math.max(s.best,m/pos.entry)}));
+    if(remainAmt<0.0005)setPositions(p=>p.filter(pp=>pp.id!==id));
+    else setPositions(p=>p.map(pp=>pp.id===id?{...pp,amt:remainAmt}:pp));
+    flashScreen(profit>=0?"#00ff8822":"#ff336622",150);
+    if(m/pos.entry>=3)spawnParticles(4,["💰","💸","🤑"]);
+  };
+
+  const W=780,H_CHART=260,PL=45,PR=15,PT=15,PB=20;
+  const IW=W-PL-PR,IH=H_CHART-PT-PB;
+  const allC=[...candles,...(currentCandle&&phase==="live"?[currentCandle]:[])];
+  const display=allC.slice(-35);
+  const prices=display.length>0?display.flatMap(c=>[c.h,c.l]):[];
+  const minP=prices.length?Math.min(...prices)*0.95:0.5;
+  const maxP=prices.length?Math.max(...prices)*1.05:1.5;
+  const range=maxP-minP||1;
+  const yS=v=>PT+IH-((v-minP)/range)*IH;
+  const cw=display.length>0?IW/display.length:IW;
+  const gridVals=[];const step=range/5;for(let i=0;i<=5;i++)gridVals.push(minP+step*i);
+
+  const mCol=phase==="crashed"?"#ff3366":mult>=10?"#ffaa00":mult>=3?"#00ff88":mult>=1.5?"#22dd77":"#aaccaa";
+  const glow=Math.min((mult-1)/8,1);
+  const hist=roundHistory.slice(-10).reverse();
+  const stats2x=roundHistory.filter(h=>h.crash>=2).length;
+  const stats10x=roundHistory.filter(h=>h.crash>=10).length;
+  const stats50x=roundHistory.filter(h=>h.crash>=50).length;
+  const hasPos=positions.length>0;
+
+  return(
+    React.createElement('div',{style:{
+      background:bgPulse?"#0b0c10":"#0a0b0f",color:"#e0e0e0",minHeight:"100vh",fontFamily:"'SF Mono','Fira Code','Consolas',monospace",overflow:"hidden",position:"relative",
+      animation:bgPulse?"bgPulse 0.5s infinite alternate":"none",
+      transform:screenShake?`translate(${(Math.random()-0.5)*screenShake*2}px,${(Math.random()-0.5)*screenShake*2}px)`:"none",
+      boxShadow:borderGlow?`inset 0 0 60px ${borderGlow}33, inset 0 0 120px ${borderGlow}11`:"none",transition:"box-shadow 0.3s"
+    }},
+      React.createElement('style',null,`
+        @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+        @keyframes bigshake{0%,100%{transform:translate(0,0)}10%{transform:translate(-5px,3px)}30%{transform:translate(5px,-3px)}50%{transform:translate(-3px,5px)}70%{transform:translate(3px,-5px)}90%{transform:translate(-5px,2px)}}
+        @keyframes rugged{0%{transform:scale(0.2)rotate(-15deg);opacity:0}40%{transform:scale(1.3)rotate(5deg);opacity:1}100%{transform:scale(1)rotate(0);opacity:1}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+        @keyframes fadeSlide{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:translateY(0)}}
+        @keyframes glowPulse{0%,100%{text-shadow:0 0 10px currentColor}50%{text-shadow:0 0 40px currentColor,0 0 80px currentColor}}
+        @keyframes crashFlash{0%{opacity:1}100%{opacity:0}}
+        @keyframes countPulse{0%{transform:scale(1.3);opacity:1}50%{transform:scale(1)}100%{transform:scale(1);opacity:0.8}}
+        @keyframes countBounce{0%{transform:scale(2);opacity:0}30%{transform:scale(0.9);opacity:1}50%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+        @keyframes roundStart{0%{transform:scale(0.5);opacity:0}20%{transform:scale(1.3);opacity:1}40%{transform:scale(1);opacity:1}100%{transform:scale(1.5);opacity:0}}
+        @keyframes floatUp{0%{opacity:0.9;transform:translateY(0) scale(1)}50%{opacity:0.7}100%{opacity:0;transform:translateY(-180px) scale(0.3)}}
+        @keyframes hypeText{0%{opacity:0;transform:translate(-50%,-50%) scale(0.5)}20%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}40%{transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-70%) scale(0.8)}}
+        @keyframes bgPulse{0%{background:#0a0b0f}100%{background:#0f1015}}
+        @keyframes megaPump{0%{transform:scale(1)}50%{transform:scale(1.08)}100%{transform:scale(1)}}
+        @keyframes sideGlow{0%,100%{opacity:0.3}50%{opacity:0.8}}
+        .feed-item{animation:fadeSlide 0.3s ease-out}
+      `),
+
+      screenFlash&&React.createElement('div',{style:{position:"fixed",inset:0,background:screenFlash,zIndex:150,pointerEvents:"none",animation:"crashFlash 0.4s ease-out forwards"}}),
+
+      preCountdown>0&&React.createElement('div',{style:{position:"fixed",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:180,pointerEvents:"none",background:"#00000066"}},
+        React.createElement('div',{style:{textAlign:"center"}},
+          React.createElement('div',{key:`cd-${preCountdown}`,style:{fontSize:160,fontWeight:900,color:"#ffaa00",lineHeight:1,textShadow:"0 0 80px #ffaa0066,0 0 160px #ffaa0033",animation:"countBounce 0.8s ease-out"}},preCountdown),
+          React.createElement('div',{style:{fontSize:24,color:"#ffaa00",fontWeight:800,marginTop:8,letterSpacing:4,animation:"pulse 0.5s infinite"}},`ROUND #${roundNum}`),
+          positions.length>0&&React.createElement('div',{style:{fontSize:16,color:"#00ff88",marginTop:8,fontWeight:700}},`🎲 ${positions.length} position${positions.length>1?"s":""} ready`)
+        )
+      ),
+
+      roundStartFlash&&React.createElement('div',{style:{position:"fixed",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:180,pointerEvents:"none"}},
+        React.createElement('div',{style:{textAlign:"center",animation:"roundStart 1.2s ease-out forwards"}},
+          React.createElement('div',{style:{fontSize:60,fontWeight:900,color:"#00ff88",letterSpacing:6,textShadow:"0 0 40px #00ff8866"}},"GO!"),
+          React.createElement('div',{style:{fontSize:18,color:"#00ff8888",marginTop:4}},"🎲🎲🎲")
+        )
+      ),
+
+      particles.map(p=>React.createElement(Particle,{key:p.id,...p})),
+      hypeTexts.map(h=>React.createElement(HypeMsg,{key:h.id,...h})),
+
+      borderGlow&&React.createElement(React.Fragment,null,
+        React.createElement('div',{style:{position:"fixed",left:0,top:0,bottom:0,width:3,background:`linear-gradient(180deg,transparent,${borderGlow},transparent)`,zIndex:100,animation:"sideGlow 0.8s infinite",pointerEvents:"none"}}),
+        React.createElement('div',{style:{position:"fixed",right:0,top:0,bottom:0,width:3,background:`linear-gradient(180deg,transparent,${borderGlow},transparent)`,zIndex:100,animation:"sideGlow 0.8s infinite",pointerEvents:"none"}}),
+        React.createElement('div',{style:{position:"fixed",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg,transparent,${borderGlow},transparent)`,zIndex:100,animation:"sideGlow 0.8s infinite",pointerEvents:"none"}})
+      ),
+
+      // TOP BAR
+      React.createElement('div',{style:{display:"flex",alignItems:"center",gap:8,padding:"8px 16px",borderBottom:"1px solid #1a1b2e",background:"#0d0e14",overflowX:"auto",flexWrap:"nowrap"}},
+        React.createElement('span',{style:{fontSize:22}},"🎲🎲"),
+        React.createElement('span',{style:{fontSize:16,fontWeight:800,background:"linear-gradient(90deg,#00ff88,#00ccff)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",marginRight:8}},"DICEY"),
+        React.createElement('div',{style:{display:"flex",gap:6,marginRight:8}},
+          React.createElement('span',{style:{background:"#00ff8822",color:"#00ff88",padding:"2px 8px",borderRadius:10,fontSize:11,fontWeight:700}},`2x ${stats2x}`),
+          React.createElement('span',{style:{background:"#ffaa0022",color:"#ffaa00",padding:"2px 8px",borderRadius:10,fontSize:11,fontWeight:700}},`10x ${stats10x}`),
+          React.createElement('span',{style:{background:"#ff336622",color:"#ff3366",padding:"2px 8px",borderRadius:10,fontSize:11,fontWeight:700}},`50x ${stats50x}`)
+        ),
+        comboStreak>=2&&React.createElement('span',{style:{background:"linear-gradient(90deg,#ffaa00,#ff8800)",color:"#000",padding:"2px 10px",borderRadius:10,fontSize:11,fontWeight:800}},`🔥 ${comboStreak} STREAK`),
+        React.createElement('div',{style:{display:"flex",gap:4,marginLeft:"auto"}},
+          hist.map((h,i)=>React.createElement('div',{key:i,style:{minWidth:48,padding:"2px 5px",borderRadius:4,background:"#111827",border:`1px solid ${h.crash>=2?"#00ff8833":"#ff336633"}`,textAlign:"center"}},
+            React.createElement('div',{style:{fontSize:11,fontWeight:700,color:h.crash>=10?"#ffaa00":h.crash>=2?"#00ff88":"#ff3366"}},fmtM(h.crash))
+          ))
+        )
+      ),
+
+      // MAIN GRID
+      React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 250px",maxWidth:1300,margin:"0 auto"}},
+        // LEFT
+        React.createElement('div',{style:{padding:"10px 14px"}},
+          // CHART
+          React.createElement('div',{style:{background:"#0f1018",borderRadius:12,border:`1px solid ${borderGlow||"#1a1b2e"}`,position:"relative",overflow:"hidden",animation:phase==="crashed"?"bigshake 0.5s ease-out":"none",transition:"border-color 0.5s"}},
+            React.createElement('div',{style:{position:"absolute",right:20,bottom:16,zIndex:5,textAlign:"right"}},
+              phase==="live"&&!preCountdown&&React.createElement(React.Fragment,null,
+                React.createElement('div',{style:{fontSize:mult>=10?80:mult>=5?68:52,fontWeight:900,color:mCol,letterSpacing:-2,lineHeight:1,textShadow:`0 0 ${15+glow*60}px ${mCol}66,0 0 ${glow*120}px ${mCol}33`,animation:mult>=5?"glowPulse 0.4s infinite":"none",transition:"font-size 0.15s"}},fmtM(mult)),
+                mult>=15&&React.createElement('div',{style:{fontSize:14,color:"#ffaa00",fontWeight:800,animation:"pulse 0.4s infinite",marginTop:2}},mult>=50?"🌙 LEGENDARY 🌙":mult>=25?"🔥 MEGA PUMP 🔥":"🚀 MOON 🚀")
+              ),
+              phase==="crashed"&&React.createElement('div',{style:{textAlign:"center"}},
+                React.createElement('div',{style:{fontSize:60,fontWeight:900,color:"#ff3366",animation:"rugged 0.4s ease-out",letterSpacing:4,textShadow:"0 0 40px #ff336688"}},crashPoint<1.1?"INSTANT RUG 💀":"RUGGED 💀"),
+                React.createElement('div',{style:{fontSize:32,marginTop:2}},"🤡🤡🤡"),
+                React.createElement('div',{style:{fontSize:18,color:"#ff336688",marginTop:4}},`Crashed at ${fmtM(crashPoint)}`),
+                React.createElement('div',{style:{fontSize:14,color:"#888",marginTop:2,fontStyle:"italic"}},RUG_MSGS[Math.floor(crashPoint*3)%RUG_MSGS.length]),
+                React.createElement('div',{style:{fontSize:14,color:"#555",marginTop:6}},`Next round in ${countdown}s`)
+              )
+            ),
+
+            phase==="live"&&mult>=5&&React.createElement('div',{style:{position:"absolute",left:14,bottom:14,zIndex:5,display:"flex",alignItems:"center",gap:8}},
+              React.createElement('div',{style:{width:48,height:48,borderRadius:24,background:mult>=25?"linear-gradient(135deg,#ff3366,#ffaa00)":mult>=10?"linear-gradient(135deg,#ffaa00,#ff8800)":"linear-gradient(135deg,#00ff88,#00cc66)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:15,color:"#000",boxShadow:`0 0 25px ${mult>=25?"#ffaa0088":"#00ff8866"}`,animation:"megaPump 0.3s infinite"}},mult>=100?"100x":mult>=50?"50x":mult>=25?"25x":mult>=15?"15x":mult>=10?"10x":"5x"),
+              React.createElement('span',{style:{fontSize:mult>=25?36:28}},mult>=25?"🚀🔥🌙":"🐸📈")
+            ),
+
+            // SVG
+            React.createElement('svg',{width:"100%",viewBox:`0 0 ${W} ${H_CHART}`,style:{display:"block"}},
+              gridVals.map((v,i)=>React.createElement('g',{key:i},
+                React.createElement('line',{x1:PL,x2:W-PR,y1:yS(v),y2:yS(v),stroke:"#1a1b2e",strokeWidth:0.5}),
+                React.createElement('text',{x:PL-6,y:yS(v)+3,fill:"#444",fontSize:9,textAnchor:"end",fontFamily:"inherit"},v.toFixed(v<1?2:1)+"x")
+              )),
+              display.map((c,i)=>{
+                const green=c.c>=c.o;const col=green?"#00ff88":"#ff3366";const x=PL+i*cw;
+                const bTop=Math.min(yS(c.o),yS(c.c));const bH=Math.max(Math.abs(yS(c.o)-yS(c.c)),2);
+                const isLast=i===display.length-1;const bigMove=Math.abs(c.c-c.o)/Math.max(c.o,0.01)>0.06;
+                return React.createElement('g',{key:i},
+                  React.createElement('line',{x1:x+cw/2,x2:x+cw/2,y1:yS(c.h),y2:yS(c.l),stroke:col,strokeWidth:0.8,opacity:0.5}),
+                  React.createElement('rect',{x:x+cw*0.2,y:bTop,width:cw*0.6,height:bH,fill:col,opacity:isLast?1:0.75,rx:0.5}),
+                  bigMove&&cw>5&&React.createElement('text',{x:x+cw/2,y:green?yS(c.h)-2:yS(c.l)+9,textAnchor:"middle",fontSize:Math.min(cw*0.9,11),style:{pointerEvents:"none"}},green?"🐸":"🤡")
+                );
+              }),
+              phase==="live"&&React.createElement('line',{x1:PL,x2:W-PR,y1:yS(mult),y2:yS(mult),stroke:"#ffffff22",strokeWidth:0.5,strokeDasharray:"4 3"}),
+              phase==="crashed"&&minP<=0.1&&React.createElement(React.Fragment,null,
+                React.createElement('line',{x1:PL,x2:W-PR,y1:yS(0),y2:yS(0),stroke:"#ff336644",strokeWidth:1}),
+                [0,1,2,3,4,5].map(i=>React.createElement('text',{key:`t${i}`,x:PL+IW*0.1+i*(IW*0.14),y:yS(0)-6,fontSize:18,opacity:0.6,textAnchor:"middle",style:{pointerEvents:"none"}},["🤡","💀","😈","🫠","☠️","🪦"][i]))
+              ),
+              positions.map(pos=>React.createElement('line',{key:pos.id,x1:PL,x2:W-PR,y1:yS(pos.entry),y2:yS(pos.entry),stroke:"#00ccff44",strokeWidth:0.5,strokeDasharray:"3 3"}))
+            )
+          ),
+
+          // CONTROLS
+          React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr auto",gap:10,marginTop:8,background:"#0f1018",borderRadius:12,border:"1px solid #1a1b2e",padding:"10px 14px"}},
+            React.createElement('div',{style:{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}},
+              React.createElement('div',null,
+                React.createElement('div',{style:{fontSize:9,color:"#555",marginBottom:3}},"BET AMOUNT"),
+                React.createElement('div',{style:{display:"flex",gap:3}},
+                  React.createElement('input',{type:"number",step:"0.001",value:betAmt,onChange:e=>setBetAmt(Math.max(0,+e.target.value)),style:{width:75,background:"#111827",border:"1px solid #1f2937",borderRadius:6,padding:"7px",color:"#fff",fontSize:12,fontFamily:"inherit",outline:"none"}}),
+                  [0.001,0.01,0.1].map(v=>React.createElement('button',{key:v,onClick:()=>setBetAmt(v),style:{background:betAmt===v?"#00ff8822":"#1f2937",border:betAmt===v?"1px solid #00ff8844":"1px solid transparent",borderRadius:5,padding:"4px 6px",color:betAmt===v?"#00ff88":"#888",cursor:"pointer",fontFamily:"inherit",fontSize:9}},`+${v}`)),
+                  React.createElement('button',{onClick:()=>setBetAmt(b=>Math.round(b/2*1000)/1000),style:{background:"#1f2937",border:"none",borderRadius:5,padding:"4px 6px",color:"#888",cursor:"pointer",fontFamily:"inherit",fontSize:9}},"½"),
+                  React.createElement('button',{onClick:()=>setBetAmt(b=>Math.min(Math.round(b*2*1000)/1000,balance)),style:{background:"#1f2937",border:"none",borderRadius:5,padding:"4px 6px",color:"#888",cursor:"pointer",fontFamily:"inherit",fontSize:9}},"2x"),
+                  React.createElement('button',{onClick:()=>setBetAmt(Math.round(balance*1000)/1000),style:{background:"#1f2937",border:"none",borderRadius:5,padding:"4px 6px",color:"#ff3366",cursor:"pointer",fontFamily:"inherit",fontSize:9,fontWeight:700}},"MAX")
+                )
+              ),
+              React.createElement('div',null,
+                React.createElement('div',{style:{fontSize:9,color:"#555",marginBottom:3}},"%"),
+                React.createElement('div',{style:{display:"flex",gap:3}},
+                  [10,25,50,100].map(p=>React.createElement('button',{key:p,onClick:()=>{setBetPct(p);setBetAmt(Math.round(balance*p/100*1000)/1000)},style:{background:betPct===p?"#00ccff22":"#1f2937",border:betPct===p?"1px solid #00ccff44":"1px solid transparent",borderRadius:5,padding:"5px 8px",color:betPct===p?"#00ccff":"#888",cursor:"pointer",fontFamily:"inherit",fontSize:10,fontWeight:betPct===p?700:400}},`${p}%`))
+                )
+              ),
+              React.createElement('div',null,
+                React.createElement('div',{style:{fontSize:9,color:"#555",marginBottom:3}},"SELL %"),
+                React.createElement('div',{style:{display:"flex",gap:3}},
+                  [10,25,50,100].map(p=>React.createElement('button',{key:p,onClick:()=>setSellPct(p),style:{background:sellPct===p?"#ffaa0022":"#1f2937",border:sellPct===p?"1px solid #ffaa0044":"1px solid transparent",borderRadius:5,padding:"5px 8px",color:sellPct===p?"#ffaa00":"#888",cursor:"pointer",fontFamily:"inherit",fontSize:10,fontWeight:sellPct===p?700:400}},`${p}%`))
+                )
+              )
+            ),
+            React.createElement('div',{style:{display:"flex",gap:8,alignItems:"center"}},
+              React.createElement('button',{onClick:handleBuy,disabled:betAmt<=0||betAmt>balance,style:{background:betAmt>0&&betAmt<=balance?"linear-gradient(135deg,#00ff88,#00cc66)":"#1a1b2e",border:"none",borderRadius:10,padding:"14px 22px",color:betAmt>0&&betAmt<=balance?"#000":"#555",fontWeight:900,fontSize:15,cursor:betAmt>0&&betAmt<=balance?"pointer":"not-allowed",fontFamily:"inherit",whiteSpace:"nowrap",boxShadow:betAmt>0&&betAmt<=balance?"0 0 20px #00ff8844":"none"}},"🎲 BUY"),
+              React.createElement('button',{onClick:()=>handleSellAll(sellPct/100),disabled:!hasPos||phase!=="live",style:{background:hasPos&&phase==="live"?"linear-gradient(135deg,#ffaa00,#ff8800)":"#1a1b2e",border:"none",borderRadius:10,padding:"14px 22px",color:hasPos&&phase==="live"?"#000":"#555",fontWeight:900,fontSize:15,cursor:hasPos&&phase==="live"?"pointer":"not-allowed",fontFamily:"inherit",whiteSpace:"nowrap",animation:hasPos&&phase==="live"?"pulse 0.5s infinite":"none",boxShadow:hasPos&&phase==="live"?"0 0 25px #ffaa0066":"none"}},"💰 SELL"),
+              React.createElement('div',{style:{textAlign:"right",minWidth:75}},
+                React.createElement('div',{style:{fontSize:9,color:"#555"}},"BAL"),
+                React.createElement('div',{style:{fontSize:15,fontWeight:800,color:"#00ff88"}},balance.toFixed(3)),
+                hasPos&&React.createElement('div',{style:{fontSize:11,color:totalPnl>=0?"#00ff88":"#ff3366",fontWeight:700}},`${totalPnl>=0?"+":""}${totalPnl.toFixed(4)}`)
+              )
+            )
+          ),
+
+          // POSITIONS + PLAYERS
+          React.createElement('div',{style:{marginTop:8,background:"#0f1018",borderRadius:12,border:"1px solid #1a1b2e",padding:"8px 12px",maxHeight:180,overflowY:"auto"}},
+            React.createElement('div',{style:{fontSize:9,color:"#555",marginBottom:4,display:"flex",justifyContent:"space-between"}},
+              React.createElement('span',null,`PLAYERS (${bots.filter(b=>b.active).length+positions.length})`),
+              React.createElement('span',null,`POT: ${(bots.reduce((s,b)=>s+b.betAmt,0)+positions.reduce((s,p)=>s+p.amt,0)).toFixed(3)}`)
+            ),
+            positions.map(pos=>{
+              const ratio=phase==="live"&&mult>0?mult/pos.entry:0;
+              const posPnl=pos.amt*ratio-pos.amt;
+              return React.createElement('div',{key:pos.id,style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 8px",borderRadius:6,background:"#00ff8811",fontSize:11,marginBottom:2}},
+                React.createElement('div',{style:{display:"flex",alignItems:"center",gap:6}},
+                  React.createElement('span',null,"🎲"),
+                  React.createElement('span',{style:{color:"#00ccff",fontWeight:700}},"You"),
+                  React.createElement('span',{style:{color:"#666"}},`${pos.amt.toFixed(3)} @${fmtM(pos.entry)}`)
+                ),
+                React.createElement('div',{style:{display:"flex",alignItems:"center",gap:4}},
+                  React.createElement('span',{style:{color:posPnl>=0?"#00ff88":"#ff3366",fontWeight:600}},`${posPnl>=0?"+":""}${posPnl.toFixed(4)}`),
+                  React.createElement('button',{onClick:()=>handleSellOne(pos.id,sellPct/100),style:{background:"#ffaa0033",border:"none",borderRadius:4,padding:"2px 8px",color:"#ffaa00",fontSize:9,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}},`${sellPct}%`)
+                )
+              );
+            }),
+            bots.map((b,i)=>React.createElement('div',{key:i,style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"3px 8px",borderRadius:4,background:i%2?"transparent":"#111318",fontSize:10,opacity:b.active||b.cashedOut?1:0.35}},
+              React.createElement('div',{style:{display:"flex",alignItems:"center",gap:5}},
+                React.createElement('span',null,b.avatar),
+                React.createElement('span',{style:{color:"#999",fontWeight:600}},b.name),
+                React.createElement('span',{style:{color:"#555"}},b.betAmt.toFixed(3))
+              ),
+              b.cashedOut?React.createElement('span',{style:{color:"#00ff88",fontWeight:700}},`+${(b.betAmt*(b.cashMult-1)).toFixed(4)} @${fmtM(b.cashMult)}`):
+              !b.active?React.createElement('span',{style:{color:"#ff3366",fontWeight:700}},`-${b.betAmt.toFixed(3)} 💀`):
+              React.createElement('span',{style:{color:"#666"}},"holding...")
+            ))
+          )
+        ),
+
+        // SIDEBAR
+        React.createElement('div',{style:{borderLeft:"1px solid #1a1b2e",background:"#0d0e14",overflowY:"auto",maxHeight:"calc(100vh - 48px)"}},
+          React.createElement('div',{style:{padding:"8px 10px",borderBottom:"1px solid #1a1b2e"}},
+            React.createElement('div',{style:{fontSize:9,color:"#555",marginBottom:4,display:"flex",alignItems:"center",gap:5}},
+              React.createElement('span',{style:{width:5,height:5,borderRadius:3,background:"#00ff88",display:"inline-block",animation:"pulse 1s infinite"}}),
+              "LIVE FEED"
+            ),
+            React.createElement('div',{style:{maxHeight:180,overflowY:"auto"}},
+              feedItems.slice(-20).reverse().map((f,i)=>React.createElement('div',{key:i,className:"feed-item",style:{display:"flex",alignItems:"center",gap:4,padding:"3px 4px",fontSize:10,borderRadius:3,marginBottom:1,background:i%2?"transparent":"#111318"}},
+                React.createElement('span',null,f.avatar),
+                React.createElement('span',{style:{color:"#888",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},f.name),
+                f.type==="cashout"&&React.createElement('span',{style:{color:"#00ff88",fontWeight:700}},`SOLD ${fmtM(f.mult)}`),
+                f.type==="buy"&&React.createElement('span',{style:{color:"#00ccff",fontWeight:700}},"BUY IN"),
+                f.type==="rug"&&React.createElement('span',{style:{color:"#ff3366",fontWeight:700}},"RUG 💀")
+              )),
+              feedItems.length===0&&React.createElement('div',{style:{color:"#333",fontSize:10,textAlign:"center",padding:10}},"...")
+            )
+          ),
+          React.createElement('div',{style:{padding:"8px 10px",borderBottom:"1px solid #1a1b2e"}},
+            React.createElement('div',{style:{fontSize:9,color:"#555",marginBottom:4}},"🏆 LEADERBOARD"),
+            leaderboard.map((p,i)=>React.createElement('div',{key:i,style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 5px",borderRadius:4,marginBottom:1,background:i<3?"#ffaa0008":i%2?"transparent":"#111318",borderLeft:i<3?`2px solid ${["#ffaa00","#aaa","#cc7744"][i]}`:"2px solid transparent"}},
+              React.createElement('div',{style:{display:"flex",alignItems:"center",gap:4}},
+                React.createElement('span',{style:{fontSize:9,color:i<3?["#ffaa00","#aaa","#cc7744"][i]:"#555",fontWeight:700,width:14}},i+1),
+                React.createElement('span',{style:{fontSize:11}},p.avatar),
+                React.createElement('span',{style:{color:"#ccc",fontWeight:600,fontSize:10}},p.name)
+              ),
+              React.createElement('span',{style:{color:p.profit>=0?"#00ff88":"#ff3366",fontWeight:700,fontSize:10}},`${p.profit>=0?"+":""}${p.profit.toFixed(3)}`)
+            ))
+          ),
+          React.createElement('div',{style:{padding:"8px 10px",borderBottom:"1px solid #1a1b2e"}},
+            React.createElement('div',{style:{fontSize:9,color:"#555",marginBottom:4}},"YOUR STATS"),
+            React.createElement('div',{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,fontSize:10}},
+              React.createElement('div',null,React.createElement('span',{style:{color:"#555"}},"Rounds"),React.createElement('br'),React.createElement('span',{style:{fontWeight:700}},stats.rounds)),
+              React.createElement('div',null,React.createElement('span',{style:{color:"#555"}},"Win Rate"),React.createElement('br'),React.createElement('span',{style:{fontWeight:700,color:stats.rounds>0&&stats.wins/stats.rounds>=0.5?"#00ff88":"#ff3366"}},stats.rounds>0?Math.round(stats.wins/stats.rounds*100)+"%":"0%")),
+              React.createElement('div',null,React.createElement('span',{style:{color:"#555"}},"P/L"),React.createElement('br'),React.createElement('span',{style:{fontWeight:700,color:stats.totalPL>=0?"#00ff88":"#ff3366"}},`${stats.totalPL>=0?"+":""}${stats.totalPL.toFixed(4)}`)),
+              React.createElement('div',null,React.createElement('span',{style:{color:"#555"}},"Best"),React.createElement('br'),React.createElement('span',{style:{fontWeight:700,color:"#ffaa00"}},fmtM(stats.best)))
+            )
+          ),
+          React.createElement('div',{style:{textAlign:"center",padding:8,fontSize:7,color:"#222"}},"🎲 DICEY v1.0 · degen responsibly")
+        )
+      )
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+</script>
+</body>
+</html>
